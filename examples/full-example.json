@@ -1,0 +1,84 @@
+{
+  "issuer": "https://gateway.example.com",
+  "ai_routing_discovery_version": "0.1",
+  "chat_completion_endpoint": "https://gateway.example.com/v1/chat/completions",
+  "completion_endpoint": "https://gateway.example.com/v1/completions",
+  "embeddings_endpoint": "https://gateway.example.com/v1/embeddings",
+  "responses_endpoint": "https://gateway.example.com/v1/responses",
+  "images_endpoint": "https://gateway.example.com/v1/images/generations",
+  "audio_endpoint": "https://gateway.example.com/v1/audio/speech",
+  "moderations_endpoint": "https://gateway.example.com/v1/moderations",
+  "files_endpoint": "https://gateway.example.com/v1/files",
+  "batch_endpoint": "https://gateway.example.com/v1/batches",
+  "fine_tuning_endpoint": "https://gateway.example.com/v1/fine_tuning/jobs",
+  "models_endpoint": "https://gateway.example.com/v1/models",
+  "models_supported": [
+    {
+      "id": "acme-large-2026-05",
+      "aliases": ["acme-large-latest"],
+      "display_name": "Acme Large (2026-05)",
+      "context_window": 200000,
+      "max_output_tokens": 8192,
+      "modalities_supported": ["text", "image"],
+      "capabilities": [
+        "tool_calling",
+        "parallel_tool_calling",
+        "streaming",
+        "structured_outputs",
+        "vision",
+        "prompt_caching"
+      ],
+      "deprecated": false,
+      "knowledge_cutoff": "2026-03-01"
+    },
+    {
+      "id": "acme-small-2025-11",
+      "display_name": "Acme Small (2025-11)",
+      "context_window": 128000,
+      "max_output_tokens": 4096,
+      "modalities_supported": ["text"],
+      "capabilities": ["tool_calling", "streaming", "json_mode"],
+      "deprecated": true,
+      "deprecation_date": "2026-12-01",
+      "successor_id": "acme-large-2026-05",
+      "knowledge_cutoff": "2025-09-01"
+    }
+  ],
+  "mcp_servers": [
+    {
+      "name": "filesystem",
+      "url": "https://gateway.example.com/mcp/filesystem",
+      "transport": "streamable-http",
+      "description": "Read/write access to the workspace filesystem.",
+      "auth_required": true,
+      "capabilities": ["tools", "resources"]
+    },
+    {
+      "name": "web-search",
+      "url": "https://gateway.example.com/mcp/web-search",
+      "transport": "sse",
+      "description": "General web search tool.",
+      "auth_required": true,
+      "capabilities": ["tools"]
+    }
+  ],
+  "auth_methods_supported": ["api_key", "oauth2"],
+  "token_endpoint": "https://gateway.example.com/oauth/token",
+  "authorization_endpoint": "https://gateway.example.com/oauth/authorize",
+  "scopes_supported": ["chat.completions", "embeddings.read", "mcp.filesystem"],
+  "api_key_header": "Authorization",
+  "api_key_scheme": "Bearer",
+  "streaming_protocols_supported": ["sse"],
+  "tool_calling_formats_supported": ["openai-tools", "mcp"],
+  "rate_limits": "https://gateway.example.com/v1/rate_limits",
+  "health_endpoint": "https://gateway.example.com/health",
+  "status_page": "https://status.example.com",
+  "pricing_endpoint": "https://gateway.example.com/v1/pricing",
+  "documentation_url": "https://docs.example.com",
+  "terms_of_service_url": "https://example.com/legal/tos",
+  "privacy_policy_url": "https://example.com/legal/privacy",
+  "data_residency": ["us-east-1", "eu-west-1"],
+  "jwks_uri": "https://gateway.example.com/.well-known/jwks.json",
+  "contact": ["mailto:api-support@example.com"],
+  "x_acme_internal_routing_tier": "standard"
+}

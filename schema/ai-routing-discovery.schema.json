@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gateway.example.com/schema/ai-routing-discovery.schema.json",
+  "title": "AI Routing Discovery Document",
+  "type": "object",
+  "required": ["issuer", "ai_routing_discovery_version"],
+  "additionalProperties": true,
+  "patternProperties": {
+    "^x_[a-z0-9_]+$": {
+      "description": "Vendor extension field. See spec Section 11."
+    }
+  },
+  "properties": {
+    "issuer": {
+      "type": "string",
+      "format": "uri",
+      "description": "Canonical base URL of the gateway. Must match the URL used to fetch this document."
+    },
+    "ai_routing_discovery_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+$",
+      "description": "Spec version, e.g. '0.1'."
+    },
+    "chat_completion_endpoint": { "type": "string", "format": "uri" },
+    "completion_endpoint": { "type": "string", "format": "uri" },
+    "embeddings_endpoint": { "type": "string", "format": "uri" },
+    "responses_endpoint": { "type": "string", "format": "uri" },
+    "images_endpoint": { "type": "string", "format": "uri" },
+    "audio_endpoint": { "type": "string", "format": "uri" },
+    "moderations_endpoint": { "type": "string", "format": "uri" },
+    "files_endpoint": { "type": "string", "format": "uri" },
+    "batch_endpoint": { "type": "string", "format": "uri" },
+    "fine_tuning_endpoint": { "type": "string", "format": "uri" },
+    "models_endpoint": { "type": "string", "format": "uri" },
+    "models_supported": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/modelObject" }
+    },
+    "mcp_servers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/mcpServerObject" }
+    },
+    "auth_methods_supported": {
+      "type": "array",
+      "items": { "enum": ["api_key", "oauth2", "mtls", "none"] }
+    },
+    "token_endpoint": { "type": "string", "format": "uri" },
+    "authorization_endpoint": { "type": "string", "format": "uri" },
+    "oauth_authorization_server": {
+      "type": "string",
+      "format": "uri",
+      "description": "Pointer to an RFC 8414 authorization server metadata document, if OAuth is supported via a standard AS."
+    },
+    "scopes_supported": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "api_key_header": { "type": "string" },
+    "api_key_scheme": { "type": "string" },
+    "streaming_protocols_supported": {
+      "type": "array",
+      "items": { "enum": ["sse", "websocket", "grpc"] }
+    },
+    "tool_calling_formats_supported": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "openai-tools",
+          "anthropic-tools",
+          "mcp",
+          "gemini-function-calling"
+        ]
+      }
+    },
+    "rate_limits": {
+      "oneOf": [
+        { "$ref": "#/$defs/rateLimitObject" },
+        { "type": "string", "format": "uri" }
+      ]
+    },
+    "health_endpoint": { "type": "string", "format": "uri" },
+    "status_page": { "type": "string", "format": "uri" },
+    "pricing_endpoint": { "type": "string", "format": "uri" },
+    "documentation_url": { "type": "string", "format": "uri" },
+    "terms_of_service_url": { "type": "string", "format": "uri" },
+    "privacy_policy_url": { "type": "string", "format": "uri" },
+    "data_residency": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "jwks_uri": { "type": "string", "format": "uri" },
+    "contact": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "signature": {
+      "type": "string",
+      "description": "Optional JWS compact-serialization signature over the document body."
+    }
+  },
+  "$defs": {
+    "modelObject": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string" },
+        "aliases": { "type": "array", "items": { "type": "string" } },
+        "display_name": { "type": "string" },
+        "context_window": { "type": "integer", "minimum": 1 },
+        "max_output_tokens": { "type": "integer", "minimum": 1 },
+        "modalities_supported": {
+          "type": "array",
+          "items": { "enum": ["text", "image", "audio", "video"] }
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "tool_calling",
+              "parallel_tool_calling",
+              "streaming",
+              "structured_outputs",
+              "json_mode",
+              "vision",
+              "prompt_caching",
+              "extended_thinking",
+              "fine_tunable"
+            ]
+          }
+        },
+        "deprecated": { "type": "boolean", "default": false },
+        "deprecation_date": { "type": "string", "format": "date" },
+        "successor_id": { "type": "string" },
+        "knowledge_cutoff": { "type": "string", "format": "date" }
+      }
+    },
+    "mcpServerObject": {
+      "type": "object",
+      "required": ["name", "url", "transport"],
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string" },
+        "url": { "type": "string", "format": "uri" },
+        "transport": {
+          "enum": ["streamable-http", "sse", "stdio-remote-proxy"]
+        },
+        "description": { "type": "string" },
+        "auth_required": { "type": "boolean", "default": false },
+        "auth_methods_supported": {
+          "type": "array",
+          "items": { "enum": ["api_key", "oauth2", "mtls", "none"] }
+        },
+        "capabilities": {
+          "type": "array",
+          "items": { "enum": ["tools", "resources", "prompts", "sampling"] }
+        }
+      }
+    },
+    "rateLimitObject": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "requests_per_minute": { "type": "integer", "minimum": 0 },
+        "tokens_per_minute": { "type": "integer", "minimum": 0 },
+        "concurrent_requests": { "type": "integer", "minimum": 0 },
+        "scope": { "enum": ["per_api_key", "per_ip", "global"] }
+      }
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "issuer": "https://gateway.example.com",
+  "ai_routing_discovery_version": "0.1",
+  "chat_completion_endpoint": "https://gateway.example.com/v1/chat/completions",
+  "models_supported": [
+    { "id": "example-model-1" }
+  ]
+}
