@@ -38,7 +38,13 @@
     },
     "mcp_servers": {
       "type": "array",
+      "description": "SENSITIVE. Reveals internal server topology; SHOULD NOT be present in an unauthenticated response. See spec Section 5.1 and Section 15.",
       "items": { "$ref": "#/$defs/mcpServerObject" }
+    },
+    "mcp_servers_endpoint": {
+      "type": "string",
+      "format": "uri",
+      "description": "Pointer to a separately-authenticated endpoint returning mcp_servers-shaped data. RECOMMENDED over inlining mcp_servers. See spec Section 5.1."
     },
     "auth_methods_supported": {
       "type": "array",
@@ -105,6 +111,19 @@
       "additionalProperties": true,
       "properties": {
         "id": { "type": "string" },
+        "object": {
+          "type": "string",
+          "const": "model",
+          "description": "RECOMMENDED, for alignment with the OpenAI models-list shape."
+        },
+        "created": {
+          "type": "integer",
+          "description": "Unix timestamp, for alignment with the OpenAI models-list shape."
+        },
+        "owned_by": {
+          "type": "string",
+          "description": "Provider/organization owning the model, for alignment with the OpenAI models-list shape."
+        },
         "aliases": { "type": "array", "items": { "type": "string" } },
         "display_name": { "type": "string" },
         "context_window": { "type": "integer", "minimum": 1 },

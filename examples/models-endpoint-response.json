@@ -1,0 +1,41 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "acme-large-2026-05",
+      "object": "model",
+      "created": 1746057600,
+      "owned_by": "acme",
+      "aliases": ["acme-large-latest"],
+      "display_name": "Acme Large (2026-05)",
+      "context_window": 200000,
+      "max_output_tokens": 8192,
+      "modalities_supported": ["text", "image"],
+      "capabilities": [
+        "tool_calling",
+        "parallel_tool_calling",
+        "streaming",
+        "structured_outputs",
+        "vision",
+        "prompt_caching"
+      ],
+      "deprecated": false,
+      "knowledge_cutoff": "2026-03-01"
+    },
+    {
+      "id": "acme-small-2025-11",
+      "object": "model",
+      "created": 1731888000,
+      "owned_by": "acme",
+      "display_name": "Acme Small (2025-11)",
+      "context_window": 128000,
+      "max_output_tokens": 4096,
+      "modalities_supported": ["text"],
+      "capabilities": ["tool_calling", "streaming", "json_mode"],
+      "deprecated": true,
+      "deprecation_date": "2026-12-01",
+      "successor_id": "acme-large-2026-05",
+      "knowledge_cutoff": "2025-09-01"
+    }
+  ]
+}

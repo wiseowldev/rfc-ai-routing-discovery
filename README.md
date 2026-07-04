@@ -39,10 +39,24 @@ a model allowlist, and per-provider auth logic.
 ## Contents
 
 - [`rfc/draft-ai-routing-discovery-00.md`](rfc/draft-ai-routing-discovery-00.md)
-  — the RFC-style draft specification
+  — the RFC-style draft specification, readable as Markdown
+- [`rfc/draft-ai-routing-discovery-00.xml`](rfc/draft-ai-routing-discovery-00.xml)
+  — the same draft in official IETF Internet-Draft form (xml2rfc v3 /
+  RFC 7991 vocabulary). Fill in the `TODO` placeholders (author name,
+  organization, address, draft name) and run it through `xml2rfc` to
+  produce a submission-ready `.txt`/`.html` with correct IETF
+  boilerplate. See the comment block at the top of the file for exact
+  steps.
 - [`schema/ai-routing-discovery.schema.json`](schema/ai-routing-discovery.schema.json)
   — JSON Schema for the discovery document
-- [`examples/`](examples/) — example discovery documents (full and minimal)
+- [`examples/`](examples/) — example discovery documents:
+  [`public-example.json`](examples/public-example.json) (anonymous
+  caller — sensitive fields gated, per Section 5.1),
+  [`full-example.json`](examples/full-example.json) (authenticated
+  caller — every field), [`minimal-example.json`](examples/minimal-example.json)
+  (smallest conforming document), and
+  [`models-endpoint-response.json`](examples/models-endpoint-response.json)
+  (the OpenAI-compatible shape returned by `models_endpoint`)
 
 ## License
 
@@ -77,31 +91,25 @@ Accept: application/json
   "ai_routing_discovery_version": "0.1",
   "chat_completion_endpoint": "https://api.example.com/v1/chat/completions",
   "models_endpoint": "https://api.example.com/v1/models",
-  "models_supported": [
-    {
-      "id": "acme-large-2026-05",
-      "context_window": 200000,
-      "max_output_tokens": 8192,
-      "modalities_supported": ["text", "image"],
-      "capabilities": ["tool_calling", "streaming", "structured_outputs"]
-    }
-  ],
-  "mcp_servers": [
-    {
-      "name": "filesystem",
-      "url": "https://api.example.com/mcp/filesystem",
-      "transport": "streamable-http",
-      "auth_required": true
-    }
-  ],
+  "mcp_servers_endpoint": "https://api.example.com/v1/mcp_servers",
   "auth_methods_supported": ["api_key", "oauth2"],
   "token_endpoint": "https://api.example.com/oauth/token",
   "streaming_protocols_supported": ["sse"]
 }
 ```
 
-See [`examples/full-example.json`](examples/full-example.json) for the
-complete, all-fields version.
+This is what an **anonymous** caller gets: routing information only.
+`models_endpoint` points at an OpenAI-compatible models list (see
+[`examples/models-endpoint-response.json`](examples/models-endpoint-response.json)),
+and `mcp_servers_endpoint` points at an endpoint that itself requires
+authentication before it discloses any MCP server topology — the
+gateway never advertises its internal server-stack architecture to an
+unauthenticated request. See
+[`examples/public-example.json`](examples/public-example.json) for
+the full anonymous response and
+[`examples/full-example.json`](examples/full-example.json) for what
+an authenticated, authorized caller receives instead (including the
+inline `mcp_servers` array).
 
 [oidc-disc]: https://openid.net/specs/openid-connect-discovery-1_0.html
 [rfc8414]: https://www.rfc-editor.org/rfc/rfc8414

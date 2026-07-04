@@ -144,6 +144,10 @@ Goals:
 - Be incrementally adoptable: every field except `issuer` and
   `ai_routing_discovery_version` is OPTIONAL, so a gateway can
   publish a minimal document on day one and grow it over time.
+- Not turn discovery into reconnaissance: fields that expose internal
+  architecture (notably MCP server topology) are explicitly
+  identified as sensitive and gated behind authentication by default
+  (Section 5.1), rather than published to any anonymous caller.
 
 Non-goals:
 
@@ -208,9 +212,10 @@ provider APIs.
 | `files_endpoint` | OPTIONAL | string (URL) | File upload endpoint (for fine-tuning, batch, or RAG inputs). |
 | `batch_endpoint` | OPTIONAL | string (URL) | Asynchronous batch job submission endpoint. |
 | `fine_tuning_endpoint` | OPTIONAL | string (URL) | Fine-tuning job endpoint. |
-| `models_endpoint` | RECOMMENDED | string (URL) | Endpoint returning the live/paginated model list (the mirror of `models_supported` for large catalogs). |
-| `models_supported` | RECOMMENDED | array of [Model Object](#6-the-model-object) | Inline model catalog. SHOULD be omitted (in favor of `models_endpoint`) if the catalog is large or changes frequently. |
-| `mcp_servers` | OPTIONAL | array of [MCP Server Object](#7-the-mcp-server-object) | MCP servers associated with this gateway. |
+| `models_endpoint` | RECOMMENDED | string (URL) | Primary discovery mechanism for models. SHOULD return an OpenAI-compatible model list shape; see Section 6. |
+| `models_supported` | OPTIONAL | array of [Model Object](#6-the-model-object) | Inline model catalog, for small/simple gateways only. SHOULD be omitted in favor of `models_endpoint` (Section 6) once a gateway has more than a handful of models. |
+| `mcp_servers` | OPTIONAL, SENSITIVE | array of [MCP Server Object](#7-the-mcp-server-object) | MCP servers associated with this gateway. Reveals internal service topology — see Section 5.1 and Section 15 before including this in an unauthenticated response. Prefer `mcp_servers_endpoint`. |
+| `mcp_servers_endpoint` | OPTIONAL | string (URL) | Pointer to a separately-authenticated endpoint returning `mcp_servers`-shaped data. RECOMMENDED over inlining `mcp_servers` so that anonymous discovery does not expose server topology. |
 | `auth_methods_supported` | RECOMMENDED | array of string | One or more of `api_key`, `oauth2`, `mtls`, `none`. |
 | `token_endpoint` | OPTIONAL | string (URL) | OAuth 2.0 token endpoint, present if `oauth2` is supported. |
 | `authorization_endpoint` | OPTIONAL | string (URL) | OAuth 2.0 authorization endpoint, for user-delegated flows. |
@@ -219,7 +224,7 @@ provider APIs.
 | `api_key_scheme` | OPTIONAL | string | Value prefix for the header, e.g. `"Bearer"`. |
 | `streaming_protocols_supported` | OPTIONAL | array of string | One or more of `sse`, `websocket`, `grpc`. |
 | `tool_calling_formats_supported` | OPTIONAL | array of string | One or more of `openai-tools`, `anthropic-tools`, `mcp`, `gemini-function-calling`. |
-| `rate_limits` | OPTIONAL | [Rate Limit Object](#8-the-rate-limit-object) or string (URL) | Inline rate-limit policy, or a URL to fetch it dynamically (since limits are often per-key). |
+| `rate_limits` | OPTIONAL | [Rate Limit Object](#8-the-rate-limit-object) or string (URL) | Inline rate-limit policy, or a URL to fetch it dynamically (since limits are often per-key). Prefer the URL form; see Section 5.1. |
 | `health_endpoint` | OPTIONAL | string (URL) | Health/status check endpoint. |
 | `status_page` | OPTIONAL | string (URL) | Human-readable incident/status page. |
 | `pricing_endpoint` | OPTIONAL | string (URL) | Machine-readable pricing data. |
@@ -235,14 +240,99 @@ Fields whose value is unknown or not applicable MUST be omitted
 rather than set to `null`, so that clients can use simple key
 presence checks.
 
+### 5.1. Field Sensitivity and Default Disclosure
+
+A discovery document is, by design, fetchable without authentication
+(Section 4). That is appropriate for fields whose only job is to
+route a client to the right URL — but not every field is like that.
+Some fields describe internal architecture in enough detail that
+publishing them to anyone on the internet is itself an exposure, most
+notably the full list of MCP servers a gateway wires up (their
+hostnames, transports, and what tools/resources each one grants
+access to).
+
+This specification therefore distinguishes two tiers:
+
+- **Public fields** — safe to return to any caller, authenticated or
+  not. This includes `issuer`, `ai_routing_discovery_version`,
+  `chat_completion_endpoint` and the other endpoint pointers,
+  `models_endpoint`, `auth_methods_supported`, `token_endpoint`,
+  `documentation_url`, and similar. These exist specifically so that
+  unauthenticated tooling (SDK setup wizards, documentation
+  generators) can bootstrap against a gateway.
+- **Sensitive fields** — marked SENSITIVE in the table above
+  (currently `mcp_servers`; the inline form of `rate_limits` is a
+  softer case of the same concern). These reveal internal topology or
+  capacity information rather than just routing information.
+
+For sensitive fields, gateways:
+
+1. **SHOULD NOT** include them in the default, unauthenticated
+   discovery response. Simply omit the field, per the rule above —
+   do not return an error, and do not return an empty array as a
+   signal that the field exists but is being withheld (see the "fail
+   closed, not loud" guidance in Section 15).
+2. **SHOULD** return them only from an authenticated request (Section
+   13), and MAY further restrict them to callers holding a specific
+   scope or permission if the gateway already has a scope system
+   (e.g. a `discovery.mcp` scope) — this specification does not
+   mandate a particular scope name.
+3. **SHOULD** prefer exposing a *pointer* (`mcp_servers_endpoint`)
+   over inlining the sensitive data directly, so that a cached or
+   leaked copy of the public discovery document does not itself
+   contain the sensitive payload. The pointer target enforces its own
+   authentication independently.
+
+Gateways with no sensitivity concerns (e.g. an internal-only gateway
+already behind a private network boundary) MAY inline `mcp_servers`
+directly and skip `mcp_servers_endpoint` entirely — this tiering is a
+recommendation for gateways exposed to the public internet, not a
+hard requirement for every deployment.
+
 ## 6. The Model Object
 
-Each entry in `models_supported` (or returned by `models_endpoint`)
-is an object:
+### 6.1. Models Endpoint (Primary Mechanism)
+
+`models_endpoint` is the RECOMMENDED way to discover a gateway's
+model catalog. This deliberately aligns with the model-listing
+endpoint shape already implemented by OpenAI and the large number of
+gateways and proxies that describe themselves as "OpenAI-compatible."
+A `GET` to `models_endpoint` SHOULD return:
+
+```json
+{
+  "object": "list",
+  "data": [
+    { "id": "acme-large-2026-05", "object": "model", "created": 1750000000, "owned_by": "acme" }
+  ]
+}
+```
+
+Each entry in `data` is a Model Object (Section 6.2). The four
+fields shown above (`id`, `object`, `created`, `owned_by`) are the
+fields defined by the widely-deployed OpenAI models-list shape.
+Gateways that already run such an endpoint satisfy this part of the
+specification without modification. This specification's additional
+capability fields (Section 6.2) are purely additive JSON keys on the
+same objects — existing OpenAI-compatible clients that ignore unknown
+fields are unaffected, while clients that understand this
+specification get the extra capability data for free.
+
+Gateways with a small, rarely-changing catalog MAY instead (or
+additionally) publish `models_supported` as an inline array of Model
+Objects directly in the discovery document, skipping the extra round
+trip. `models_endpoint` SHOULD be preferred once a catalog is large,
+paginated, or changes independently of the discovery document's own
+cache lifetime (Section 12).
+
+### 6.2. Model Object Fields
 
 | Field | Required | Type | Description |
 |---|---|---|---|
 | `id` | REQUIRED | string | Model identifier as accepted by the completion endpoints. |
+| `object` | RECOMMENDED | string | `"model"`, for alignment with the OpenAI models-list shape. |
+| `created` | OPTIONAL | integer | Unix timestamp of model creation/availability, for OpenAI-shape alignment. |
+| `owned_by` | OPTIONAL | string | Organization or provider that owns the model, for OpenAI-shape alignment. |
 | `aliases` | OPTIONAL | array of string | Other identifiers that resolve to the same model (e.g. a floating `"latest"` tag). |
 | `display_name` | OPTIONAL | string | Human-readable name. |
 | `context_window` | OPTIONAL | integer | Max input tokens. |
@@ -254,11 +344,22 @@ is an object:
 | `successor_id` | OPTIONAL | string | Recommended replacement model `id`, if deprecated. |
 | `knowledge_cutoff` | OPTIONAL | string (date) | Training data cutoff. |
 
+Only `id` is REQUIRED by this specification; `object`, `created`, and
+`owned_by` are RECOMMENDED specifically to keep a `models_endpoint`
+response usable by generic OpenAI-compatible client code that expects
+those keys, even before that code is updated to understand this
+specification's capability fields.
+
 Clients SHOULD treat unrecognized `capabilities` values as
 informational and ignore them rather than failing, since this list
 is expected to grow (Section 10).
 
 ## 7. The MCP Server Object
+
+> **Sensitivity note:** the array of MCP Server Objects described
+> here is a SENSITIVE field (Section 5.1) whether it appears inline
+> as `mcp_servers` or is fetched from `mcp_servers_endpoint`. Do not
+> expose it to unauthenticated callers; see Section 15.
 
 | Field | Required | Type | Description |
 |---|---|---|---|
@@ -274,6 +375,13 @@ This lets a client resolve, e.g., "the filesystem MCP server for
 this gateway" without a separate registry — analogous to how OIDC
 discovery exposes a `jwks_uri` rather than requiring keys to be
 distributed out of band.
+
+Gateways SHOULD set `url` to an address on the gateway's own public
+domain (routed internally to the actual MCP server) rather than a raw
+internal hostname, IP address, or private DNS name. Even to an
+authorized caller, an internal hostname unnecessarily reveals
+infrastructure detail (e.g. cluster naming conventions, internal
+network segmentation) that has nothing to do with using the server.
 
 ## 8. The Rate Limit Object
 
@@ -360,9 +468,16 @@ remain identical regardless of authentication, since it is the
 identity anchor clients validate against (Section 4).
 
 Gateways with this need SHOULD still serve a reasonable
-default/anonymous document (at minimum, endpoints and public model
-capabilities) so that unauthenticated discovery — e.g. for
+default/anonymous document (at minimum, the public fields identified
+in Section 5.1) so that unauthenticated discovery — e.g. for
 documentation generators or SDK setup wizards — still works.
+
+This is also the mechanism by which sensitive fields (Section 5.1),
+most notably `mcp_servers`, are gated: an unauthenticated request
+gets a document with those fields omitted, and only a request
+carrying valid credentials (and, at the gateway's option, an
+appropriate scope) gets the full document or a working
+`mcp_servers_endpoint` response.
 
 ## 14. Relationship to Existing Specifications
 
@@ -375,12 +490,14 @@ documentation generators or SDK setup wizards — still works.
   this spec relies on; see Section 17.
 - **Model Context Protocol (MCP)** defines the transport and
   semantics of the servers listed in `mcp_servers`; this spec only
-  describes *how a client finds* those servers, not how they behave
-  once connected.
-- This spec deliberately does not compete with or replace
-  provider-specific "list models" endpoints (e.g. `GET /v1/models`);
-  `models_endpoint` is meant to point at exactly that kind of
-  existing endpoint where one already exists.
+  describes *how a client finds* those servers (subject to the
+  sensitivity gating in Section 5.1), not how they behave once
+  connected.
+- This spec deliberately builds on, rather than replaces,
+  provider-specific "list models" endpoints (e.g. OpenAI's
+  `GET /v1/models`); `models_endpoint` (Section 6) is designed to be
+  satisfiable by exactly that kind of existing endpoint, extended
+  additively.
 
 ## 15. Security Considerations
 
@@ -413,6 +530,25 @@ documentation generators or SDK setup wizards — still works.
   or frequently changing model catalogs SHOULD use `models_endpoint`
   rather than inlining thousands of `models_supported` entries into
   a document that's meant to be cheaply cacheable.
+- **Topology minimization.** A discovery document is easy to fetch
+  anonymously and, being cacheable, easy to mirror or leak well
+  beyond its intended audience. Fields that describe internal
+  architecture rather than mere routing — in particular `mcp_servers`
+  — are SENSITIVE (Section 5.1) and SHOULD NOT appear in the default,
+  unauthenticated response. An attacker who can enumerate a
+  gateway's full MCP server topology (internal tool names,
+  transports, and what each one grants access to) has a
+  reconnaissance map they should not get for free from a `.well-known`
+  URI. Prefer `mcp_servers_endpoint` gated behind its own
+  authentication over inlining `mcp_servers` on a public gateway.
+- **Fail closed, not loud.** When a gateway withholds sensitive
+  fields from an unauthorized caller, it SHOULD do so by omission
+  (the field is simply absent, exactly as if the gateway never
+  implemented it) rather than by returning an error such as `403` on
+  the discovery endpoint itself, or an empty array where a populated
+  one would otherwise appear. Either of those signals to a prober
+  that privileged data exists and is being withheld, which is itself
+  information leakage about the gateway's internal posture.
 
 ## 16. Privacy Considerations
 
@@ -462,7 +598,11 @@ configuration.
 ## 19. Examples
 
 See [`examples/full-example.json`](../examples/full-example.json) for
-a document exercising every field, and
+an *authenticated* response exercising every field, including the
+sensitive `mcp_servers` array (Section 5.1);
+[`examples/public-example.json`](../examples/public-example.json) for
+what the same gateway returns to an anonymous caller (no
+`mcp_servers`, `rate_limits` given as a URL instead of inline); and
 [`examples/minimal-example.json`](../examples/minimal-example.json)
 for the smallest conforming document:
 
@@ -490,13 +630,12 @@ over:
    string array (current proposal) or a nested object
    (`capabilities: { tool_calling: { parallel: true } }`)? The flat
    array is simpler but harder to extend with parameters.
-3. **Relationship to `GET /v1/models`.** Most providers already
-   have a models-list endpoint with a different (usually
-   OpenAI-shaped) schema. Should `models_endpoint` require that
-   response to conform to the Model Object shape in Section 6, or
-   is it acceptable for it to point at the existing
-   provider-native shape, with `models_supported` as the only
-   place the spec's own shape is guaranteed?
+3. **Relationship to `GET /v1/models`.** *Resolved in this draft* —
+   `models_endpoint` (Section 6) is defined to be satisfiable by an
+   existing OpenAI-compatible models-list endpoint, with this spec's
+   capability fields layered on additively. Still open: whether that
+   should eventually become a MUST rather than a SHOULD (see item 8
+   below).
 4. **MCP auth delegation.** Should MCP server auth be assumed to
    flow through the same credential as the gateway's own API
    (single sign-on to all listed MCP servers), or fully independent?
@@ -510,6 +649,20 @@ over:
    body (IETF individual submission, a neutral consortium) or at
    least multi-vendor buy-in so it isn't read as one company's
    private format.
+7. **Sensitive-field gating mechanism.** Section 5.1 says gateways
+   MAY use a scope or permission to gate `mcp_servers` /
+   `mcp_servers_endpoint` beyond plain authentication, but this draft
+   does not standardize a scope name (e.g. `discovery.mcp`) or
+   require one. Should a future revision mandate a specific scope so
+   clients can request least-privilege discovery credentials
+   portably across gateways?
+8. **OpenAI-shape as MUST vs. SHOULD.** Section 6 requires only `id`
+   and merely RECOMMENDs `object`/`created`/`owned_by` on
+   `models_endpoint` entries, to avoid forcing gateways with a
+   differently-shaped native models endpoint (e.g. one that isn't
+   OpenAI-compatible at all) to add a second endpoint. Is that
+   flexibility worth the interop cost, or should conformance require
+   the OpenAI shape outright?
 
 ## 21. References
 

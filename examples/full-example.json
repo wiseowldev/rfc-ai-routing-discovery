@@ -15,6 +15,9 @@
   "models_supported": [
     {
       "id": "acme-large-2026-05",
+      "object": "model",
+      "created": 1746057600,
+      "owned_by": "acme",
       "aliases": ["acme-large-latest"],
       "display_name": "Acme Large (2026-05)",
       "context_window": 200000,
@@ -33,6 +36,9 @@
     },
     {
       "id": "acme-small-2025-11",
+      "object": "model",
+      "created": 1731888000,
+      "owned_by": "acme",
       "display_name": "Acme Small (2025-11)",
       "context_window": 128000,
       "max_output_tokens": 4096,
